@@ -1,6 +1,11 @@
 ﻿#include <GL\glew.h>
 #include <GLFW\glfw3.h>
+
 #include <iostream>
+#include <string>
+#include <fstream>
+
+using namespace std;
 
 #define numVAOs 1
 
@@ -41,6 +46,23 @@ bool checkOpenGLError() {
     return foundError;
 }
 
+string readShaderSource(const char* filePath) {
+    string content;
+    ifstream fileStream(filePath, ios::in);
+    string line;
+
+    if (!fileStream) {
+        cout << "open file fail!" << endl;
+    }
+
+    while (!fileStream.eof()) {
+        getline(fileStream, line);
+        content.append(line + "\n");
+    }
+    fileStream.close();
+    return content;
+}
+
 GLuint renderingProgram;
 GLuint vao[numVAOs];
 
@@ -49,16 +71,11 @@ GLuint createShaderProgram() {
     GLint fragCompiled;
     GLint linked;
 
-    const char *vshaderSource =
-        "#version 430 \n"
-        "void main(void) \n"
-        "{ gl_Position = vec4(0.0, 0.0, 0.0, 1.0); }";
+    string vertShaderStr = readShaderSource("vertShader.glsl");
+    string fragShaderStr = readShaderSource("fragShader.glsl");
 
-    const char *fshaderSource = 
-        "#version 430 \n"
-        "out vec4 color; \n"
-        "void main(void) \n"
-        "{ color = vec4(0.0, 0.0, 1.0, 1.0); }";
+    const char *vertShaderSrc = vertShaderStr.c_str();
+    const char *fragShaderSrc = fragShaderStr.c_str();
 
     // Create a vertex shader
     GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
@@ -66,8 +83,8 @@ GLuint createShaderProgram() {
     GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
 
     // Load GLSL code from string into the empty shader object
-    glShaderSource(vShader, 1, &vshaderSource, NULL);
-    glShaderSource(fShader, 1, &fshaderSource, NULL);
+    glShaderSource(vShader, 1, &vertShaderSrc, NULL);
+    glShaderSource(fShader, 1, &fragShaderSrc, NULL);
 
     // Compile each shader
     glCompileShader(vShader);
@@ -117,7 +134,7 @@ void init(GLFWwindow* window) {
 void display(GLFWwindow* window, double currentTime) {
     //Load shaders into hardware
     glUseProgram(renderingProgram);
-    glDrawArrays(GL_POINTS, 0, 1);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
 int main(void) {
@@ -125,10 +142,10 @@ int main(void) {
 
     //Specify the openGl version number
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 
     //Create the openGl context 
-    GLFWwindow* window = glfwCreateWindow(600, 600, "Chapter2 - program3", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(600, 600, "Chapter2 - program3 + 4", NULL, NULL);
     //Link the openGl context and glfwWindow
     glfwMakeContextCurrent(window);
 
