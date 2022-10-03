@@ -4,10 +4,51 @@
 
 #define numVAOs 1
 
+void printShaderLog(GLuint shader) {
+    int len = 0;
+    int chWrittn = 0;
+    char* log;
+    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
+    if (len > 0) {
+        log = (char*)malloc(len);
+        glGetShaderInfoLog(shader, len, &chWrittn, log);
+        std::cout << "Shader Info Log:" << log << std::endl;
+        free(log);
+    }
+}
+
+void printProgramLog(int prog) {
+    int len = 0;
+    int chWritten = 0;
+    char* log;
+    glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &len);
+    if (len > 0) {
+        log = (char*)malloc(len);
+        glGetProgramInfoLog(prog, len, &chWritten, log);
+        std::cout << "Program Info Log:" << log << std::endl;
+        free(log);
+    }
+}
+
+bool checkOpenGLError() {
+    bool foundError = false;
+    int glErr = glGetError();
+    while (glErr != GL_NO_ERROR) {
+        std::cout << "glError: " << glErr << std::endl;
+        foundError = true;
+        glErr = glGetError();
+    }
+    return foundError;
+}
+
 GLuint renderingProgram;
 GLuint vao[numVAOs];
 
 GLuint createShaderProgram() {
+    GLint vertCompiled;
+    GLint fragCompiled;
+    GLint linked;
+
     const char *vshaderSource =
         "#version 430 \n"
         "void main(void) \n"
@@ -30,19 +71,37 @@ GLuint createShaderProgram() {
 
     // Compile each shader
     glCompileShader(vShader);
+    checkOpenGLError();
+    glGetShaderiv(vShader, GL_COMPILE_STATUS, &vertCompiled);
+    if (vertCompiled != 1) {
+        std::cout << "vertex compliation failed" << std::endl;
+        printShaderLog(vShader);
+    }
+
     glCompileShader(fShader);
+    checkOpenGLError();
+    glGetShaderiv(fShader, GL_COMPILE_STATUS, &fragCompiled);
+    if (fragCompiled != 1) {
+        std::cout << "vertex compliation failed" << std::endl;
+        printShaderLog(fShader);
+    }
 
     // Create an openGl program object
     GLuint vfProgram = glCreateProgram();
     // Attach the shader to openGl program object
     glAttachShader(vfProgram, vShader);
     glAttachShader(vfProgram, fShader);
+
     glLinkProgram(vfProgram);
+    checkOpenGLError();
+    glGetProgramiv(vfProgram, GL_LINK_STATUS, &linked);
+    if (linked != 1) {
+        std::cout << "linking failed" << std::endl;
+        printProgramLog(vfProgram);
+    }
 
     return vfProgram;
 }
-
-using namespace std;
 
 void init(GLFWwindow* window) {
     renderingProgram = createShaderProgram();
@@ -69,7 +128,7 @@ int main(void) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
     //Create the openGl context 
-    GLFWwindow* window = glfwCreateWindow(600, 600, "Chapter2 - program1", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(600, 600, "Chapter2 - program3", NULL, NULL);
     //Link the openGl context and glfwWindow
     glfwMakeContextCurrent(window);
 
