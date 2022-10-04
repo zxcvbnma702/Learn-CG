@@ -18,9 +18,17 @@
     <ClCompile Include="CG.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Utils.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="vertShader.glsl" />
-    <None Include="fragShader.glsl" />
+    <None Include="vertShader.shader" />
+    <None Include="fragShader.shader" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Utils.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -1,157 +1,114 @@
 ﻿#include <GL\glew.h>
 #include <GLFW\glfw3.h>
-
-#include <iostream>
 #include <string>
+#include <iostream>
 #include <fstream>
+#include <cmath>
+#include <glm.hpp>
+#include <gtc\type_ptr.hpp>
+#include <gtc\matrix_transform.hpp>
+#include "Utils.h"
 
 using namespace std;
 
 #define numVAOs 1
+#define numVBOs 2
 
-void printShaderLog(GLuint shader) {
-    int len = 0;
-    int chWrittn = 0;
-    char* log;
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
-    if (len > 0) {
-        log = (char*)malloc(len);
-        glGetShaderInfoLog(shader, len, &chWrittn, log);
-        std::cout << "Shader Info Log:" << log << std::endl;
-        free(log);
-    }
-}
-
-void printProgramLog(int prog) {
-    int len = 0;
-    int chWritten = 0;
-    char* log;
-    glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &len);
-    if (len > 0) {
-        log = (char*)malloc(len);
-        glGetProgramInfoLog(prog, len, &chWritten, log);
-        std::cout << "Program Info Log:" << log << std::endl;
-        free(log);
-    }
-}
-
-bool checkOpenGLError() {
-    bool foundError = false;
-    int glErr = glGetError();
-    while (glErr != GL_NO_ERROR) {
-        std::cout << "glError: " << glErr << std::endl;
-        foundError = true;
-        glErr = glGetError();
-    }
-    return foundError;
-}
-
-string readShaderSource(const char* filePath) {
-    string content;
-    ifstream fileStream(filePath, ios::in);
-    string line;
-
-    if (!fileStream) {
-        cout << "open file fail!" << endl;
-    }
-
-    while (!fileStream.eof()) {
-        getline(fileStream, line);
-        content.append(line + "\n");
-    }
-    fileStream.close();
-    return content;
-}
-
+float cameraX, cameraY, cameraZ;
+float cubeLocX, cubeLocY, cubeLocZ;
 GLuint renderingProgram;
 GLuint vao[numVAOs];
+GLuint vbo[numVBOs];
 
-GLuint createShaderProgram() {
-    GLint vertCompiled;
-    GLint fragCompiled;
-    GLint linked;
+// Allocate space for variables used in the display() function so they don't have to be allocated during rendering
+GLuint mvLoc, projLoc;
+int width, height;
+float aspect;
+glm::mat4 pMat, vMat, mMat, mvMat, tMat, rMat;
 
-    string vertShaderStr = readShaderSource("vertShader.glsl");
-    string fragShaderStr = readShaderSource("fragShader.glsl");
+void setupVertices(void) {    
+    //36 vertices, 12 triangles, make up a 2×2×2 cube placed at the origin 
+    float vertexPositions[108] = {
+       -1.0f, 1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f, -1.0f, -1.0f,
+       1.0f, -1.0f, -1.0f, 1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f,
+       1.0f, -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, -1.0f,
+       1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f,
+       1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+       -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+       -1.0f, -1.0f, 1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f, 1.0f,
+       -1.0f, -1.0f, -1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f,
+       -1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f, -1.0f, -1.0f,
+       1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,
+       -1.0f, 1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f,
+       1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f, -1.0f
+    };
+    glGenVertexArrays(1, vao);
+    glBindVertexArray(vao[0]);
+    glGenBuffers(numVBOs, vbo);
 
-    const char *vertShaderSrc = vertShaderStr.c_str();
-    const char *fragShaderSrc = fragShaderStr.c_str();
-
-    // Create a vertex shader
-    GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
-    // Create a fragment shader
-    GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
-
-    // Load GLSL code from string into the empty shader object
-    glShaderSource(vShader, 1, &vertShaderSrc, NULL);
-    glShaderSource(fShader, 1, &fragShaderSrc, NULL);
-
-    // Compile each shader
-    glCompileShader(vShader);
-    checkOpenGLError();
-    glGetShaderiv(vShader, GL_COMPILE_STATUS, &vertCompiled);
-    if (vertCompiled != 1) {
-        std::cout << "vertex compliation failed" << std::endl;
-        printShaderLog(vShader);
-    }
-
-    glCompileShader(fShader);
-    checkOpenGLError();
-    glGetShaderiv(fShader, GL_COMPILE_STATUS, &fragCompiled);
-    if (fragCompiled != 1) {
-        std::cout << "vertex compliation failed" << std::endl;
-        printShaderLog(fShader);
-    }
-
-    // Create an openGl program object
-    GLuint vfProgram = glCreateProgram();
-    // Attach the shader to openGl program object
-    glAttachShader(vfProgram, vShader);
-    glAttachShader(vfProgram, fShader);
-
-    glLinkProgram(vfProgram);
-    checkOpenGLError();
-    glGetProgramiv(vfProgram, GL_LINK_STATUS, &linked);
-    if (linked != 1) {
-        std::cout << "linking failed" << std::endl;
-        printProgramLog(vfProgram);
-    }
-
-    return vfProgram;
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertexPositions), vertexPositions, GL_STATIC_DRAW);
 }
 
 void init(GLFWwindow* window) {
-    renderingProgram = createShaderProgram();
-    /*!
-        Even if the application doesn't use any buffers at all, 
-        OpenGL still needs at least one created VAO when using shaders, 
-        so these two lines are used to create the VAO required by OpenGL.
-    */
-    glGenVertexArrays(numVAOs, vao);
-    glBindVertexArray(vao[0]);
+    renderingProgram = Utils::createShaderProgram("vertShader.shader", "fragShader.shader");
+    cameraX = 0.0f; cameraY = 0.0f; cameraZ = 8.0f;
+    cubeLocX = 0.0f; cubeLocY = -2.0f; cubeLocZ = 0.0f;
+    setupVertices();
 }
 
 void display(GLFWwindow* window, double currentTime) {
-    //Load shaders into hardware
+
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT);
+
     glUseProgram(renderingProgram);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+
+    // Get uniform variables for MV matrix and projection matrix
+    mvLoc = glGetUniformLocation(renderingProgram, "mv_matrix");
+    projLoc = glGetUniformLocation(renderingProgram, "proj_matrix");
+
+    // Build the perspective matrix
+    glfwGetFramebufferSize(window, &width, &height);
+    aspect = (float)width / (float)height;
+    pMat = glm::perspective(1.0472f, aspect, 0.1f, 1000.0f); // 1.0472 radians = 60 degrees
+
+    // Build view matrices,time matrices, rotate matrices, model matrices, and view-model matrices
+    vMat = glm::translate(glm::mat4(1.0f), glm::vec3(-cameraX, -cameraY, -cameraZ));
+
+    tMat = glm::translate(glm::mat4(1.0f),
+            glm::vec3(sin(0.35f * currentTime) * 2.0f, cos(0.52f * currentTime) * 2.0f, sin(0.7f * currentTime) * 2.0f));
+
+    rMat = glm::rotate(glm::mat4(1.0f), 1.75f * (float)currentTime, glm::vec3(0.0f, 1.0f, 0.0f));
+    rMat = glm::rotate(rMat, 1.75f * (float)currentTime, glm::vec3(1.0f, 0.0f, 0.0f));
+    rMat = glm::rotate(rMat, 1.75f * (float)currentTime, glm::vec3(0.0f, 0.0f, 1.0f));
+
+    mMat = tMat * rMat;
+
+    mvMat = vMat * mMat;
+
+    // Copy the perspective matrix and MV matrix to the corresponding uniform variables
+    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mvMat));
+    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(pMat));
+
+    // Associate the VBO to the corresponding vertex attribute in the vertex shader
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(0);
+
+    // Adjust OpenGL settings, draw the model
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
 }
 
-int main(void) {
+int main(void) {                            // main()和之前的没有变化
     if (!glfwInit()) { exit(EXIT_FAILURE); }
-
-    //Specify the openGl version number
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-
-    //Create the openGl context 
-    GLFWwindow* window = glfwCreateWindow(600, 600, "Chapter2 - program3 + 4", NULL, NULL);
-    //Link the openGl context and glfwWindow
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    GLFWwindow* window = glfwCreateWindow(600, 600, "Chapter 4 - program 1", NULL, NULL);
     glfwMakeContextCurrent(window);
-
     if (glewInit() != GLEW_OK) { exit(EXIT_FAILURE); }
-
-    //Turn on vertical sync
     glfwSwapInterval(1);
 
     init(window);
@@ -161,8 +118,8 @@ int main(void) {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
     glfwDestroyWindow(window);
     glfwTerminate();
     exit(EXIT_SUCCESS);
 }
+
