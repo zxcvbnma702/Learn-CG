@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <stack>
 #include <cmath>
 #include <glm.hpp>
 #include <gtc\type_ptr.hpp>
@@ -15,17 +16,17 @@ using namespace std;
 #define numVBOs 2
 
 float cameraX, cameraY, cameraZ;
-float cubeLocX, cubeLocY, cubeLocZ;
-float pyrLocX, pyrLocY, pyrLocZ;
 GLuint renderingProgram;
 GLuint vao[numVAOs];
 GLuint vbo[numVBOs];
 
 // Allocate space for variables used in the display() function so they don't have to be allocated during rendering
-GLuint vLoc, projLoc, tfLoc;
+GLuint mvLoc, projLoc, tfLoc;
 int width, height;
 float aspect, timeFactor;
 glm::mat4 pMat, vMat, mMat, mvMat, tMat, rMat;
+
+stack<glm::mat4> mvStack;
 
 void setupVertices(void) {    
     //36 vertices, 12 triangles, make up a 2×2×2 cube placed at the origin 
@@ -71,57 +72,73 @@ void init(GLFWwindow* window) {
     pMat = glm::perspective(1.0472f, aspect, 0.1f, 1000.0f); // 1.0472 radians = 60 degrees
 
     cameraX = 0.0f; cameraY = 0.0f; cameraZ = 8.0f;
-    cubeLocX = 0.0f; cubeLocY = -2.0f; cubeLocZ = 0.0f;
-    pyrLocX = 2.0f; pyrLocY = 2.0f; pyrLocZ = 0.0f;
     setupVertices();
 }
 
 void display(GLFWwindow* window, double currentTime) {
     glClear(GL_DEPTH_BUFFER_BIT);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(renderingProgram);
 
-    vLoc = glGetUniformLocation(renderingProgram, "mv_matrix");
+    mvLoc = glGetUniformLocation(renderingProgram, "mv_matrix");
     projLoc = glGetUniformLocation(renderingProgram, "proj_matrix");
 
     vMat = glm::translate(glm::mat4(1.0f), glm::vec3(-cameraX, -cameraY, -cameraZ));
+    mvStack.push(vMat);
 
-    // draw the cube using buffer #0
-    mMat = glm::translate(glm::mat4(1.0f), glm::vec3(cubeLocX, cubeLocY, cubeLocZ));
-    mvMat = vMat * mMat;
-
-    glUniformMatrix4fv(vLoc, 1, GL_FALSE, glm::value_ptr(mvMat));
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(pMat));
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(0);
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-
-    // draw the pyramid using buffer #1
-    mMat = glm::translate(glm::mat4(1.0f), glm::vec3(pyrLocX, pyrLocY, pyrLocZ));
-    mvMat = vMat * mMat;
-
-    glUniformMatrix4fv(vLoc, 1, GL_FALSE, glm::value_ptr(mvMat));
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(pMat));
-
+    
+    // ----------------------  pyramid == sun
+    mvStack.push(mvStack.top());
+    mvStack.top() *= glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+    mvStack.push(mvStack.top());
+    mvStack.top() *= rotate(glm::mat4(1.0f), (float)currentTime, glm::vec3(1.0, 0.0, 0.0));
+    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mvStack.top()));
     glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
     glEnableVertexAttribArray(0);
-
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
-
     glDrawArrays(GL_TRIANGLES, 0, 18);
+    mvStack.pop();
+
+    //-----------------------  cube == planet  
+    mvStack.push(mvStack.top());
+    mvStack.top() *= glm::translate(glm::mat4(1.0f), glm::vec3(sin((float)currentTime) * 4.0, 0.0f, cos((float)currentTime) * 4.0));
+    mvStack.push(mvStack.top());
+    mvStack.top() *= rotate(glm::mat4(1.0f), (float)currentTime, glm::vec3(0.0, 1.0, 0.0));
+    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mvStack.top()));
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+    glEnableVertexAttribArray(0);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    mvStack.pop();
+
+    //-----------------------  smaller cube == moon
+    mvStack.push(mvStack.top());
+    mvStack.top() *= glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, sin((float)currentTime) * 2.0, cos((float)currentTime) * 2.0));
+    mvStack.top() *= rotate(glm::mat4(1.0f), (float)currentTime, glm::vec3(0.0, 0.0, 1.0));
+    mvStack.top() *= scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
+    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mvStack.top()));
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0);
+    glEnableVertexAttribArray(0);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    mvStack.pop(); mvStack.pop(); mvStack.pop();
+    mvStack.pop();  // the final pop is for the view matrix
+
 }
 
 void window_size_callback(GLFWwindow* win, int newWidth, int newHeight) {
     aspect = (float)newWidth / (float)newHeight;
     glViewport(0, 0, newWidth, newHeight);
+    //Get perspective Martexic
     pMat = glm::perspective(1.0472f, aspect, 0.1f, 1000.0f);
 }
 
